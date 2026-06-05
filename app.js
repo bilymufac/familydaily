@@ -13,7 +13,6 @@ const totalWorkingDays = countWorkingDaysInCutoffPeriod(today);
 const state = loadState();
 
 const elements = {
-  resetButton: document.querySelector("#reset-button"),
   todayDate: document.querySelector("#today-date"),
   balanceLists: document.querySelectorAll("[data-balance-list]"),
   addBalanceButtons: document.querySelectorAll("[data-add-balance-button]"),
@@ -156,17 +155,6 @@ elements.resultModal.addEventListener("click", (event) => {
   if (event.target === elements.resultModal) {
     closeResultModal();
   }
-});
-
-elements.resetButton.addEventListener("click", () => {
-  sections.forEach((section) => {
-    state[section] = { balances: [0], dailyBudget: 0, monthlyBudget: 0 };
-    renderBalanceFields(section);
-    document.querySelector(`[data-monthly-budget-input="${section}"]`).value = "";
-    setMonthlyBudgetEditing(section, false);
-  });
-  saveState();
-  closeResultModal();
 });
 
 render();

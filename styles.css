@@ -53,26 +53,15 @@ button {
 }
 
 .app-bar {
-  display: flex;
-  align-items: center;
-}
-
-.app-bar {
-  justify-content: space-between;
   margin-bottom: 18px;
 }
 
-.nav-icon {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--blue);
-  font-size: 1.75rem;
-  line-height: 1;
+.app-bar h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .top-card {
