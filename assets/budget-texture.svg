@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600" role="img" aria-label="Subtle budget pattern">
+  <defs>
+    <pattern id="coins" width="120" height="120" patternUnits="userSpaceOnUse">
+      <circle cx="24" cy="26" r="15" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="4"/>
+      <path d="M22 18v16M29 20c-3-3-11-2-11 3 0 7 14 4 14 11 0 6-9 7-15 2" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="3" stroke-linecap="round"/>
+      <rect x="68" y="70" width="42" height="28" rx="6" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="4"/>
+      <path d="M75 86h22" stroke="rgba(255,255,255,.12)" stroke-width="4" stroke-linecap="round"/>
+    </pattern>
+  </defs>
+  <rect width="900" height="600" fill="url(#coins)"/>
+  <path d="M620 0c-40 80-16 167 72 260s112 190 62 300" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="42" stroke-linecap="round"/>
+  <path d="M164 600c60-112 48-214-36-306S34 110 86 0" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="34" stroke-linecap="round"/>
+</svg>

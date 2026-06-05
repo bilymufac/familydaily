@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Budget</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero-panel" aria-labelledby="today-date">
+        <div class="app-bar">
+          <button class="nav-icon" type="button" aria-label="Open Menu" title="Open Menu">
+            <span aria-hidden="true">☰</span>
+          </button>
+          <button class="nav-icon" id="reset-button" type="button" aria-label="Reset Planner" title="Reset Planner">
+            <span aria-hidden="true">↺</span>
+          </button>
+        </div>
+
+        <div class="top-card">
+          <div class="title-group">
+            <p class="date-line" id="today-date">Friday, 5 June 2026</p>
+          </div>
+
+          <div class="working-days-progress top-working-days">
+            <div class="cutoff-row">
+              <span>Cut Off</span>
+              <strong id="cutoff-date-output">25th</strong>
+            </div>
+            <div class="progress-row">
+              <div class="progress-track" aria-hidden="true">
+                <span id="working-days-fill"></span>
+              </div>
+            </div>
+            <p id="working-days-output">Remaining 0 Working Days</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="category-section budget-form" aria-labelledby="budget-form-title">
+        <h2 id="budget-form-title">Balance Input</h2>
+
+        <div class="balance-field" data-balance-field="meal">
+          <div class="budget-summary">
+            <div class="monthly-budget-row" data-monthly-budget-row="meal">
+              <div class="monthly-budget-main">
+                <div class="budget-label-row">
+                  <span>🍽️ Meal Budget</span>
+                  <small>Ideal: <strong data-ideal-budget-output="meal">Rp 0</strong></small>
+                </div>
+                <div class="budget-value-row">
+                  <strong data-monthly-budget-output="meal">Rp 0</strong>
+                  <button class="edit-button" type="button" data-edit-budget-button="meal" aria-label="Edit Meal Budget" title="Edit Meal Budget">
+                    <span aria-hidden="true">✎</span>
+                  </button>
+                </div>
+              </div>
+              <input
+                class="monthly-budget-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-label="Meal Budget"
+                data-monthly-budget-input="meal"
+                hidden
+              />
+            </div>
+          </div>
+
+          <div class="field-header">
+            <span>Balance</span>
+            <button class="add-balance-button" type="button" data-add-balance-button="meal" aria-label="Add Meal Balance" title="Add Meal Balance">
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
+          <div class="balance-list" data-balance-list="meal"></div>
+        </div>
+
+        <div class="balance-field" data-balance-field="transportation">
+          <div class="budget-summary">
+            <div class="monthly-budget-row" data-monthly-budget-row="transportation">
+              <div class="monthly-budget-main">
+                <div class="budget-label-row">
+                  <span>🚌 Transportation Budget</span>
+                  <small>Ideal: <strong data-ideal-budget-output="transportation">Rp 0</strong></small>
+                </div>
+                <div class="budget-value-row">
+                  <strong data-monthly-budget-output="transportation">Rp 0</strong>
+                  <button class="edit-button" type="button" data-edit-budget-button="transportation" aria-label="Edit Transportation Budget" title="Edit Transportation Budget">
+                    <span aria-hidden="true">✎</span>
+                  </button>
+                </div>
+              </div>
+              <input
+                class="monthly-budget-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-label="Transportation Budget"
+                data-monthly-budget-input="transportation"
+                hidden
+              />
+            </div>
+          </div>
+
+          <div class="field-header">
+            <span>Balance</span>
+            <button class="add-balance-button" type="button" data-add-balance-button="transportation" aria-label="Add Transportation Balance" title="Add Transportation Balance">
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
+          <div class="balance-list" data-balance-list="transportation"></div>
+        </div>
+
+        <button class="calculate-button" id="calculate-button" type="button">Calculate</button>
+      </section>
+    </main>
+
+    <div class="result-modal" id="result-modal" hidden>
+      <div class="result-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
+        <button class="modal-close-button" id="close-result-button" type="button" aria-label="Close Result">×</button>
+        <h2 id="result-title">Daily Budget</h2>
+        <div class="result-list">
+          <div class="result-card" id="meal-result-card">
+            <div class="result-heading">
+              <h3>Meal</h3>
+              <span class="result-status" id="meal-status">Not Set</span>
+            </div>
+            <div class="result-balance-row">
+              <span>Total Balance</span>
+              <strong id="meal-total-balance">Rp 0</strong>
+            </div>
+            <strong class="result-amount" id="meal-result">Rp 0</strong>
+          </div>
+          <div class="result-card" id="transportation-result-card">
+            <div class="result-heading">
+              <h3>Transportation</h3>
+              <span class="result-status" id="transportation-status">Not Set</span>
+            </div>
+            <div class="result-balance-row">
+              <span>Total Balance</span>
+              <strong id="transportation-total-balance">Rp 0</strong>
+            </div>
+            <strong class="result-amount" id="transportation-result">Rp 0</strong>
+          </div>
+        </div>
+        <button class="copy-result-button" id="copy-result-button" type="button">Copy</button>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
