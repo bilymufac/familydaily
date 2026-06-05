@@ -11,8 +11,11 @@ const remainingWorkingDays = countWorkingDaysUntilCutoff(today);
 const pastWorkingDays = countPastWorkingDaysUntilCutoff(today);
 const totalWorkingDays = countWorkingDaysInCutoffPeriod(today);
 const state = loadState();
+const placeImageRequests = new Set();
 
 const elements = {
+  appScreens: document.querySelectorAll("[data-app-screen]"),
+  navItems: document.querySelectorAll("[data-nav-target]"),
   todayDate: document.querySelector("#today-date"),
   balanceLists: document.querySelectorAll("[data-balance-list]"),
   addBalanceButtons: document.querySelectorAll("[data-add-balance-button]"),
@@ -36,9 +39,63 @@ const elements = {
   cutoffDateOutput: document.querySelector("#cutoff-date-output"),
   workingDaysOutput: document.querySelector("#working-days-output"),
   workingDaysFill: document.querySelector("#working-days-fill"),
+  placeForm: document.querySelector("#place-form"),
+  placeLink: document.querySelector("#place-link"),
+  placeCategory: document.querySelector("#place-category"),
+  placeFormError: document.querySelector("#place-form-error"),
+  placeList: document.querySelector("#place-list"),
+  placeCount: document.querySelector("#place-count"),
+  placesEmptyState: document.querySelector("#places-empty-state"),
 };
 
 elements.todayDate.textContent = formatDate(today);
+
+elements.navItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    setActiveScreen(item.dataset.navTarget);
+  });
+});
+
+elements.placeForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const link = normalizeGoogleMapsLink(elements.placeLink.value);
+  const category = elements.placeCategory.value;
+
+  if (!link) {
+    showPlaceFormError("Enter a valid Google Maps link.");
+    elements.placeLink.focus();
+    return;
+  }
+
+  if (!category) {
+    showPlaceFormError("Select a category.");
+    elements.placeCategory.focus();
+    return;
+  }
+
+  state.places.unshift({
+    id: createPlaceId(),
+    link,
+    category,
+  });
+  saveState();
+  renderPlaces();
+  elements.placeForm.reset();
+  showPlaceFormError("");
+});
+
+elements.placeLink.addEventListener("input", () => showPlaceFormError(""));
+elements.placeCategory.addEventListener("change", () => showPlaceFormError(""));
+
+elements.placeList.addEventListener("click", (event) => {
+  const removeButton = event.target.closest("[data-remove-place]");
+  if (!removeButton) return;
+
+  state.places = state.places.filter((place) => place.id !== removeButton.dataset.removePlace);
+  saveState();
+  renderPlaces();
+});
 
 sections.forEach((section) => {
   document.querySelector(`[data-monthly-budget-input="${section}"]`).value = formatNumber(state[section].monthlyBudget);
@@ -161,11 +218,174 @@ render();
 
 function render() {
   setWorkingDaysOutput(remainingWorkingDays);
+  renderPlaces();
 
   sections.forEach((section) => {
     setMonthlyBudgetOutput(section, state[section].monthlyBudget || 0);
     setIdealBudgetOutput(section);
   });
+}
+
+function renderPlaces() {
+  elements.placeList.innerHTML = "";
+  elements.placeCount.textContent = String(state.places.length);
+  elements.placesEmptyState.hidden = state.places.length > 0;
+
+  state.places.forEach((place) => {
+    const card = document.createElement("article");
+    card.className = "place-card";
+
+    const thumbnail = createPlaceThumbnail(place);
+
+    const content = document.createElement("div");
+    content.className = "place-card-content";
+
+    const category = document.createElement("strong");
+    category.textContent = place.category;
+
+    const link = document.createElement("a");
+    link.href = place.link;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = getDisplayLink(place.link);
+    link.setAttribute("aria-label", `Open ${place.category} in Google Maps`);
+    content.append(category, link);
+
+    const actions = document.createElement("div");
+    actions.className = "place-card-actions";
+
+    const openLink = document.createElement("a");
+    openLink.className = "place-action-button open-place";
+    openLink.href = place.link;
+    openLink.target = "_blank";
+    openLink.rel = "noopener noreferrer";
+    openLink.title = "Open in Google Maps";
+    openLink.setAttribute("aria-label", `Open ${place.category} in Google Maps`);
+    openLink.innerHTML = '<span class="place-action-icon open-icon" aria-hidden="true"></span>';
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "place-action-button";
+    removeButton.type = "button";
+    removeButton.dataset.removePlace = place.id;
+    removeButton.title = "Remove Place";
+    removeButton.setAttribute("aria-label", `Remove ${place.category}`);
+    removeButton.innerHTML = '<span class="place-action-icon delete-icon" aria-hidden="true"></span>';
+
+    actions.append(openLink, removeButton);
+    card.append(thumbnail, content, actions);
+    elements.placeList.append(card);
+  });
+
+  hydratePlaceImages();
+}
+
+function createPlaceThumbnail(place) {
+  const thumbnail = document.createElement("div");
+  thumbnail.className = "place-card-thumbnail";
+
+  if (!place.imageUrl) {
+    thumbnail.classList.add("is-placeholder");
+    thumbnail.innerHTML = '<span class="bottom-nav-icon heroicon-map-pin" aria-hidden="true"></span>';
+    return thumbnail;
+  }
+
+  const image = document.createElement("img");
+  image.src = place.imageUrl;
+  image.alt = `${place.category} place photo`;
+  image.loading = "lazy";
+  image.referrerPolicy = "no-referrer";
+  image.addEventListener("error", () => {
+    thumbnail.classList.add("is-placeholder");
+    thumbnail.innerHTML = '<span class="bottom-nav-icon heroicon-map-pin" aria-hidden="true"></span>';
+  });
+
+  thumbnail.append(image);
+  return thumbnail;
+}
+
+function hydratePlaceImages() {
+  state.places.forEach((place) => {
+    if (place.imageUrl || placeImageRequests.has(place.id)) return;
+    placeImageRequests.add(place.id);
+
+    fetchPlaceImage(place.link)
+      .then((imageUrl) => {
+        if (!imageUrl) return;
+        const savedPlace = state.places.find((item) => item.id === place.id);
+        if (!savedPlace) return;
+        savedPlace.imageUrl = imageUrl;
+        saveState();
+        renderPlaces();
+      })
+      .finally(() => placeImageRequests.delete(place.id));
+  });
+}
+
+async function fetchPlaceImage(link) {
+  try {
+    const endpoint = `https://api.microlink.io/?url=${encodeURIComponent(link)}`;
+    const response = await fetch(endpoint);
+    if (!response.ok) return "";
+
+    const result = await response.json();
+    const imageUrl = result?.data?.image?.url;
+    return typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeGoogleMapsLink(value) {
+  const rawValue = value.trim();
+  if (!rawValue) return "";
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`);
+    const hostname = url.hostname.toLowerCase();
+    const isMapsShortLink = hostname === "maps.app.goo.gl" || (hostname === "goo.gl" && url.pathname.startsWith("/maps"));
+    const isGoogleMapsLink = /(^|\.)google\.[a-z.]+$/.test(hostname) && (url.pathname.includes("/maps") || url.searchParams.has("q"));
+
+    return isMapsShortLink || isGoogleMapsLink ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function getDisplayLink(value) {
+  try {
+    const url = new URL(value);
+    return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`;
+  } catch {
+    return value;
+  }
+}
+
+function createPlaceId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function showPlaceFormError(message) {
+  elements.placeFormError.textContent = message;
+  elements.placeFormError.hidden = !message;
+}
+
+function setActiveScreen(screen) {
+  elements.appScreens.forEach((item) => {
+    item.hidden = item.dataset.appScreen !== screen;
+  });
+
+  elements.navItems.forEach((item) => {
+    const isActive = item.dataset.navTarget === screen;
+    item.classList.toggle("is-active", isActive);
+    if (isActive) {
+      item.setAttribute("aria-current", "page");
+    } else {
+      item.removeAttribute("aria-current");
+    }
+  });
+
+  closeResultModal();
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function getDailyBudget(balance) {
@@ -368,22 +588,34 @@ function loadState() {
   const fallback = {
     meal: { balances: [0], dailyBudget: 0, monthlyBudget: 0 },
     transportation: { balances: [0], dailyBudget: 0, monthlyBudget: 0 },
+    places: [],
   };
 
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey));
-    return sections.reduce((nextState, section) => {
+    const nextState = sections.reduce((loadedState, section) => {
       const balances = Array.isArray(saved?.[section]?.balances)
         ? saved[section].balances.map((balance) => Number(balance) || 0)
         : [Number(saved?.[section]?.balance) || 0];
 
-      nextState[section] = {
+      loadedState[section] = {
         balances: balances.length > 0 ? balances : [0],
         dailyBudget: Number(saved?.[section]?.dailyBudget) || 0,
         monthlyBudget: Number(saved?.[section]?.monthlyBudget) || 0,
       };
-      return nextState;
+      return loadedState;
     }, fallback);
+
+    nextState.places = Array.isArray(saved?.places)
+      ? saved.places.filter((place) => place?.id && place?.link && place?.category).map((place) => ({
+          id: String(place.id),
+          link: String(place.link),
+          category: String(place.category),
+          imageUrl: typeof place.imageUrl === "string" ? place.imageUrl : "",
+        }))
+      : [];
+
+    return nextState;
   } catch {
     return fallback;
   }

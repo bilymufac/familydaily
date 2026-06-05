@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <main class="app-shell app-screen" data-app-screen="balance">
       <section class="hero-panel" aria-labelledby="today-date">
         <div class="app-bar">
-          <h1>Daily Balance</h1>
+          <h1 class="page-title">Daily Balance</h1>
         </div>
 
         <div class="top-card">
@@ -48,7 +48,9 @@
                 <div class="budget-value-row">
                   <strong data-monthly-budget-output="meal">Rp 0</strong>
                   <button class="edit-button" type="button" data-edit-budget-button="meal" aria-label="Edit Meal Budget" title="Edit Meal Budget">
-                    <span aria-hidden="true">✎</span>
+                    <svg class="edit-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M21.731 2.269a2.625 2.625 0 0 0-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 0 0 0-3.712ZM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 0 0-1.32 2.214l-.8 2.685a.75.75 0 0 0 .933.933l2.685-.8a5.25 5.25 0 0 0 2.214-1.32L19.513 8.2Z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -84,7 +86,9 @@
                 <div class="budget-value-row">
                   <strong data-monthly-budget-output="transportation">Rp 0</strong>
                   <button class="edit-button" type="button" data-edit-budget-button="transportation" aria-label="Edit Transportation Budget" title="Edit Transportation Budget">
-                    <span aria-hidden="true">✎</span>
+                    <svg class="edit-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M21.731 2.269a2.625 2.625 0 0 0-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 0 0 0-3.712ZM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 0 0-1.32 2.214l-.8 2.685a.75.75 0 0 0 .933.933l2.685-.8a5.25 5.25 0 0 0 2.214-1.32L19.513 8.2Z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -111,6 +115,58 @@
 
         <button class="calculate-button" id="calculate-button" type="button">Calculate</button>
       </section>
+    </main>
+
+    <main class="app-shell app-screen empty-screen" data-app-screen="bucket-list" hidden>
+      <h1 class="page-title">Bucket List</h1>
+    </main>
+
+    <main class="app-shell app-screen places-screen" data-app-screen="places" hidden>
+      <header class="screen-header">
+        <h1 class="page-title">Places</h1>
+      </header>
+
+      <section class="place-form-card" aria-labelledby="add-place-title">
+        <h2 id="add-place-title">Add Place</h2>
+        <form class="place-form" id="place-form" novalidate>
+          <label class="field" for="place-link">
+            <span>Google Maps Link</span>
+            <input id="place-link" type="url" inputmode="url" autocomplete="url" placeholder="Paste Google Maps link" required />
+          </label>
+
+          <label class="field" for="place-category">
+            <span>Category</span>
+            <select id="place-category" required>
+              <option value="">Select Category</option>
+              <option value="Restaurant">Restaurant</option>
+              <option value="Cafe">Cafe</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Activity">Activity</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <p class="form-error" id="place-form-error" role="alert" hidden></p>
+          <button class="save-place-button" type="submit">Add Place</button>
+        </form>
+      </section>
+
+      <section class="saved-places" aria-labelledby="saved-places-title">
+        <div class="section-heading-row">
+          <h2 id="saved-places-title">Saved Places</h2>
+          <span id="place-count">0</span>
+        </div>
+        <div class="place-list" id="place-list"></div>
+        <div class="places-empty-state" id="places-empty-state">
+          <span class="empty-place-icon heroicon-map-pin" aria-hidden="true"></span>
+          <strong>No Saved Places</strong>
+          <p>Add a Google Maps link to start your list.</p>
+        </div>
+      </section>
+    </main>
+
+    <main class="app-shell app-screen empty-screen" data-app-screen="account" hidden>
+      <h1 class="page-title">Account</h1>
     </main>
 
     <div class="result-modal" id="result-modal" hidden>
@@ -144,6 +200,25 @@
         <button class="copy-result-button" id="copy-result-button" type="button">Copy</button>
       </div>
     </div>
+
+    <nav class="bottom-navigation" aria-label="Main Navigation">
+      <button class="bottom-nav-item is-active" type="button" data-nav-target="balance" aria-current="page">
+        <span class="bottom-nav-icon heroicon-wallet" aria-hidden="true"></span>
+        <span>Balance</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-nav-target="bucket-list">
+        <span class="bottom-nav-icon heroicon-list" aria-hidden="true"></span>
+        <span>Bucket List</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-nav-target="places">
+        <span class="bottom-nav-icon heroicon-map-pin" aria-hidden="true"></span>
+        <span>Places</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-nav-target="account">
+        <span class="bottom-nav-icon heroicon-user" aria-hidden="true"></span>
+        <span>Account</span>
+      </button>
+    </nav>
 
     <script src="app.js"></script>
   </body>
