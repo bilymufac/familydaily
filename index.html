@@ -3,15 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Daily Budget</title>
+    <title>Family Daily</title>
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app-shell app-screen" data-app-screen="balance">
       <section class="hero-panel" aria-labelledby="today-date">
         <div class="app-bar">
-          <h1 class="page-title">Daily Balance</h1>
+          <h1 class="page-title">Balance</h1>
         </div>
 
         <div class="top-card">
@@ -34,9 +38,7 @@
         </div>
       </section>
 
-      <section class="category-section budget-form" aria-labelledby="budget-form-title">
-        <h2 id="budget-form-title">Balance Input</h2>
-
+      <section class="category-section budget-form" aria-label="Balance Input">
         <div class="balance-field" data-balance-field="meal">
           <div class="budget-summary">
             <div class="monthly-budget-row" data-monthly-budget-row="meal">
@@ -126,18 +128,27 @@
         <h1 class="page-title">Places</h1>
       </header>
 
-      <section class="saved-places" aria-labelledby="saved-places-title">
-        <div class="section-heading-row">
-          <h2 id="saved-places-title">Saved Places</h2>
-          <span id="place-count">0</span>
-        </div>
+      <section class="saved-places" aria-label="Saved Places">
         <div class="places-filter-bar" aria-label="Filter Saved Places">
-          <label class="places-search" for="place-search">
-            <span aria-hidden="true"></span>
-            <input id="place-search" type="search" autocomplete="off" placeholder="Search Place" />
-          </label>
+          <div class="places-search-row">
+            <label class="places-search" for="place-search">
+              <span aria-hidden="true"></span>
+              <input id="place-search" type="search" autocomplete="off" placeholder="Search Place" />
+            </label>
+            <button class="use-location-button" id="use-location-button" type="button" aria-label="Use My Location" title="Use My Location">
+              <span aria-hidden="true"></span>
+            </button>
+            <button class="sort-places-button" id="sort-places-button" type="button" aria-expanded="false" aria-controls="sort-places-menu" aria-label="Sort Places" title="Sort Places">
+              <span aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="sort-places-menu" id="sort-places-menu" hidden>
+            <button type="button" data-place-sort="distance">By Distance</button>
+            <button type="button" data-place-sort="name">Name</button>
+            <button type="button" data-place-sort="price">Price</button>
+            <button type="button" data-place-sort="addedAt">Added Date</button>
+          </div>
           <div class="category-filter-chips" id="category-filter-chips" aria-label="Category Filter"></div>
-          <button class="use-location-button" id="use-location-button" type="button">Use My Location</button>
         </div>
         <div class="place-list" id="place-list"></div>
         <div class="places-empty-state" id="places-empty-state">
@@ -150,6 +161,16 @@
       <button class="places-fab" id="open-place-modal-button" type="button" aria-label="Add Place" title="Add Place">
         <span aria-hidden="true">+</span>
       </button>
+      <button class="random-place-fab" id="random-place-button" type="button" aria-label="Random Place Around 5 Km" title="Random Place Around 5 Km">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="4" fill="currentColor" />
+          <circle cx="9" cy="9" r="1.4" fill="#ffffff" />
+          <circle cx="15" cy="9" r="1.4" fill="#ffffff" />
+          <circle cx="12" cy="12" r="1.4" fill="#ffffff" />
+          <circle cx="9" cy="15" r="1.4" fill="#ffffff" />
+          <circle cx="15" cy="15" r="1.4" fill="#ffffff" />
+        </svg>
+      </button>
     </main>
 
     <main class="app-shell app-screen empty-screen" data-app-screen="account" hidden>
@@ -158,6 +179,7 @@
 
     <div class="result-modal" id="result-modal" hidden>
       <div class="result-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
+        <span class="sheet-handle" aria-hidden="true"></span>
         <button class="modal-close-button" id="close-result-button" type="button" aria-label="Close Result">×</button>
         <h2 id="result-title">Daily Budget</h2>
         <div class="result-list">
@@ -190,25 +212,26 @@
 
     <div class="place-modal" id="place-modal" hidden>
       <div class="place-dialog" role="dialog" aria-modal="true" aria-labelledby="add-place-title">
+        <span class="sheet-handle" aria-hidden="true"></span>
         <button class="modal-close-button" id="close-place-modal-button" type="button" aria-label="Close Add Place">×</button>
         <h2 id="add-place-title">Add Place</h2>
         <form class="place-form" id="place-form" novalidate>
           <label class="field" for="place-link">
-            <span>Google Maps Link</span>
+            <span>Google Maps Link <strong class="required-mark" aria-hidden="true">*</strong></span>
             <input id="place-link" type="url" inputmode="url" autocomplete="url" placeholder="Paste Google Maps link" required />
           </label>
 
-          <label class="field" for="place-category">
-            <span>Category</span>
-            <select id="place-category" required>
-              <option value="">Select Category</option>
-              <option value="Restaurant">Restaurant</option>
-              <option value="Cafe">Cafe</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Activity">Activity</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
+          <div class="field">
+            <span>Category <strong class="required-mark" aria-hidden="true">*</strong></span>
+            <input id="place-category" type="hidden" required />
+            <div class="category-select-chips" id="place-category-chips" tabindex="-1" aria-label="Select Category" aria-required="true"></div>
+          </div>
+
+          <div class="field">
+            <span>Price Category <strong class="required-mark" aria-hidden="true">*</strong></span>
+            <input id="place-price" type="hidden" required />
+            <div class="price-select-chips" id="place-price-chips" tabindex="-1" aria-label="Select Price Category" aria-required="true"></div>
+          </div>
 
           <label class="field" for="place-distance">
             <span>Distance</span>
@@ -218,6 +241,19 @@
           <p class="form-error" id="place-form-error" role="alert" hidden></p>
           <button class="save-place-button" type="submit">Add Place</button>
         </form>
+      </div>
+    </div>
+
+    <div class="random-place-modal" id="random-place-modal" hidden>
+      <div class="random-place-dialog" role="dialog" aria-modal="true" aria-labelledby="random-place-title">
+        <span class="sheet-handle" aria-hidden="true"></span>
+        <button class="modal-close-button" id="close-random-place-button" type="button" aria-label="Close Random Place">×</button>
+        <h2 id="random-place-title">Random Place</h2>
+        <div class="random-place-result" id="random-place-result"></div>
+        <div class="random-place-actions">
+          <button class="save-place-button" id="roll-place-again-button" type="button">Roll Again</button>
+          <button class="open-random-place-button" id="open-random-place-button" type="button">Open Maps</button>
+        </div>
       </div>
     </div>
 

@@ -1,6 +1,7 @@
 const storageKey = "daily-budget-state";
 const sections = ["meal", "transportation"];
 const placeCategories = ["Restaurant", "Cafe", "Shopping", "Activity", "Other"];
+const priceCategories = ["$", "$$", "$$$", "$$$$"];
 const currency = new Intl.NumberFormat("id-ID", {
   style: "currency",
   currency: "IDR",
@@ -16,7 +17,10 @@ const placeFilters = {
   categories: new Set(),
   search: "",
 };
+let placeSort = "addedAt";
+let placeSortDirection = "desc";
 let userLocation = null;
+let randomPlace = null;
 
 const elements = {
   appScreens: document.querySelectorAll("[data-app-screen]"),
@@ -47,17 +51,27 @@ const elements = {
   placeForm: document.querySelector("#place-form"),
   placeLink: document.querySelector("#place-link"),
   placeCategory: document.querySelector("#place-category"),
+  placePrice: document.querySelector("#place-price"),
   placeDistance: document.querySelector("#place-distance"),
   placeFormError: document.querySelector("#place-form-error"),
   placeList: document.querySelector("#place-list"),
-  placeCount: document.querySelector("#place-count"),
   placesEmptyState: document.querySelector("#places-empty-state"),
   placeSearch: document.querySelector("#place-search"),
   categoryFilterChips: document.querySelector("#category-filter-chips"),
+  placeCategoryChips: document.querySelector("#place-category-chips"),
+  placePriceChips: document.querySelector("#place-price-chips"),
   useLocationButton: document.querySelector("#use-location-button"),
+  sortPlacesButton: document.querySelector("#sort-places-button"),
+  sortPlacesMenu: document.querySelector("#sort-places-menu"),
   placesEmptyTitle: document.querySelector("#places-empty-state strong"),
   placesEmptyText: document.querySelector("#places-empty-state p"),
   openPlaceModalButton: document.querySelector("#open-place-modal-button"),
+  randomPlaceButton: document.querySelector("#random-place-button"),
+  randomPlaceModal: document.querySelector("#random-place-modal"),
+  closeRandomPlaceButton: document.querySelector("#close-random-place-button"),
+  randomPlaceResult: document.querySelector("#random-place-result"),
+  rollPlaceAgainButton: document.querySelector("#roll-place-again-button"),
+  openRandomPlaceButton: document.querySelector("#open-random-place-button"),
   closePlaceModalButton: document.querySelector("#close-place-modal-button"),
   placeModal: document.querySelector("#place-modal"),
 };
@@ -71,6 +85,14 @@ elements.navItems.forEach((item) => {
 });
 
 elements.openPlaceModalButton.addEventListener("click", openPlaceModal);
+elements.randomPlaceButton.addEventListener("click", rollRandomPlace);
+elements.rollPlaceAgainButton.addEventListener("click", rollRandomPlace);
+elements.closeRandomPlaceButton.addEventListener("click", closeRandomPlaceModal);
+elements.openRandomPlaceButton.addEventListener("click", () => {
+  if (randomPlace) {
+    window.open(randomPlace.link, "_blank", "noopener,noreferrer");
+  }
+});
 elements.closePlaceModalButton.addEventListener("click", closePlaceModal);
 
 elements.placeModal.addEventListener("click", (event) => {
@@ -79,11 +101,18 @@ elements.placeModal.addEventListener("click", (event) => {
   }
 });
 
+elements.randomPlaceModal.addEventListener("click", (event) => {
+  if (event.target === elements.randomPlaceModal) {
+    closeRandomPlaceModal();
+  }
+});
+
 elements.placeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const link = normalizeGoogleMapsLink(elements.placeLink.value);
   const category = elements.placeCategory.value;
+  const price = elements.placePrice.value;
   const manualDistance = normalizeDistance(elements.placeDistance.value);
 
   if (!link) {
@@ -94,7 +123,13 @@ elements.placeForm.addEventListener("submit", async (event) => {
 
   if (!category) {
     showPlaceFormError("Select a category.");
-    elements.placeCategory.focus();
+    elements.placeCategoryChips.focus();
+    return;
+  }
+
+  if (!price) {
+    showPlaceFormError("Select a price category.");
+    elements.placePriceChips.focus();
     return;
   }
 
@@ -106,6 +141,7 @@ elements.placeForm.addEventListener("submit", async (event) => {
     link,
     resolvedLink,
     category,
+    price,
     distance,
     addedAt: new Date().toISOString(),
   });
@@ -118,9 +154,28 @@ elements.placeForm.addEventListener("submit", async (event) => {
 
 elements.placeLink.addEventListener("input", () => showPlaceFormError(""));
 elements.placeCategory.addEventListener("change", () => showPlaceFormError(""));
+elements.placePrice.addEventListener("change", () => showPlaceFormError(""));
+
+elements.placeCategoryChips.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-place-category]");
+  if (!chip) return;
+
+  elements.placeCategory.value = chip.dataset.placeCategory;
+  elements.placeCategory.dispatchEvent(new Event("change"));
+  syncPlaceCategoryChips();
+});
+
+elements.placePriceChips.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-place-price]");
+  if (!chip) return;
+
+  elements.placePrice.value = chip.dataset.placePrice;
+  elements.placePrice.dispatchEvent(new Event("change"));
+  syncPlacePriceChips();
+});
 
 elements.useLocationButton.addEventListener("click", async () => {
-  elements.useLocationButton.textContent = "Getting Location";
+  setLocationButtonState("loading");
   elements.useLocationButton.disabled = true;
 
   try {
@@ -129,15 +184,37 @@ elements.useLocationButton.addEventListener("click", async () => {
     const updatedCount = updatePlaceDistancesFromLocation();
     saveState();
     renderPlaces();
-    elements.useLocationButton.textContent = updatedCount > 0 ? "Distance Updated" : "No Coordinates Found";
+    setLocationButtonState(updatedCount > 0 ? "success" : "empty");
   } catch {
-    elements.useLocationButton.textContent = "Location Unavailable";
+    setLocationButtonState("error");
   } finally {
     window.setTimeout(() => {
-      elements.useLocationButton.textContent = "Use My Location";
+      setLocationButtonState("idle");
       elements.useLocationButton.disabled = false;
     }, 1800);
   }
+});
+
+elements.sortPlacesButton.addEventListener("click", () => {
+  const isOpen = !elements.sortPlacesMenu.hidden;
+  elements.sortPlacesMenu.hidden = isOpen;
+  elements.sortPlacesButton.setAttribute("aria-expanded", String(!isOpen));
+});
+
+elements.sortPlacesMenu.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-place-sort]");
+  if (!option) return;
+
+  const nextSort = option.dataset.placeSort;
+  if (placeSort === nextSort) {
+    placeSortDirection = placeSortDirection === "asc" ? "desc" : "asc";
+  } else {
+    placeSort = nextSort;
+    placeSortDirection = getDefaultSortDirection(nextSort);
+  }
+  elements.sortPlacesMenu.hidden = true;
+  elements.sortPlacesButton.setAttribute("aria-expanded", "false");
+  renderPlaces();
 });
 
 elements.placeSearch.addEventListener("input", () => {
@@ -301,6 +378,8 @@ elements.resultModal.addEventListener("click", (event) => {
 });
 
 renderCategoryFilterChips();
+renderPlaceCategoryChips();
+renderPlacePriceChips();
 render();
 
 function render() {
@@ -316,10 +395,10 @@ function render() {
 function renderPlaces() {
   elements.placeList.innerHTML = "";
   const visiblePlaces = getFilteredPlaces();
-  elements.placeCount.textContent = String(visiblePlaces.length);
   elements.placesEmptyState.hidden = visiblePlaces.length > 0;
   elements.placeList.hidden = visiblePlaces.length === 0;
   syncCategoryFilterChips();
+  syncSortMenu();
 
   if (visiblePlaces.length === 0) {
     const hasFilters = placeFilters.search || placeFilters.categories.size > 0;
@@ -328,12 +407,14 @@ function renderPlaces() {
   }
 
   visiblePlaces.forEach((place) => {
+    const displayLink = place.resolvedLink || place.link;
+    const placeName = getPlaceNameFromLink(displayLink);
     const card = document.createElement("article");
     card.className = "place-card";
     card.dataset.openPlace = place.link;
     card.tabIndex = 0;
     card.setAttribute("role", "link");
-    card.setAttribute("aria-label", `Open ${getPlaceNameFromLink(place.link)} in Google Maps`);
+    card.setAttribute("aria-label", `Open ${placeName} in Google Maps`);
 
     const content = document.createElement("div");
     content.className = "place-card-content";
@@ -346,14 +427,18 @@ function renderPlaces() {
     const category = document.createElement("span");
     category.className = "place-category-label";
     category.textContent = place.category;
-    topRow.append(categoryIcon, category);
+
+    const price = document.createElement("span");
+    price.className = "place-price-label";
+    price.textContent = place.price || "$";
+    topRow.append(categoryIcon, category, price);
 
     const title = document.createElement("strong");
-    title.textContent = getPlaceNameFromLink(place.link);
+    title.textContent = placeName;
 
     const link = document.createElement("span");
     link.className = "place-link-text";
-    link.textContent = getDisplayLink(place.link);
+    link.textContent = getDisplayLink(displayLink);
 
     const distance = document.createElement("span");
     distance.className = "place-distance";
@@ -402,12 +487,102 @@ function renderCategoryFilterChips() {
   });
 }
 
+function renderPlaceCategoryChips() {
+  elements.placeCategoryChips.innerHTML = "";
+  placeCategories.forEach((category) => {
+    const chip = document.createElement("button");
+    chip.className = "category-select-chip";
+    chip.type = "button";
+    chip.dataset.placeCategory = category;
+    chip.setAttribute("aria-pressed", "false");
+    chip.textContent = category;
+    elements.placeCategoryChips.append(chip);
+  });
+}
+
+function renderPlacePriceChips() {
+  elements.placePriceChips.innerHTML = "";
+  priceCategories.forEach((price) => {
+    const chip = document.createElement("button");
+    chip.className = "price-select-chip";
+    chip.type = "button";
+    chip.dataset.placePrice = price;
+    chip.setAttribute("aria-pressed", "false");
+    chip.textContent = price;
+    elements.placePriceChips.append(chip);
+  });
+}
+
+function syncPlaceCategoryChips() {
+  elements.placeCategoryChips.querySelectorAll("[data-place-category]").forEach((chip) => {
+    const isActive = chip.dataset.placeCategory === elements.placeCategory.value;
+    chip.classList.toggle("is-active", isActive);
+    chip.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function syncPlacePriceChips() {
+  elements.placePriceChips.querySelectorAll("[data-place-price]").forEach((chip) => {
+    const isActive = chip.dataset.placePrice === elements.placePrice.value;
+    chip.classList.toggle("is-active", isActive);
+    chip.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
 function getFilteredPlaces() {
   return state.places.filter((place) => {
     const matchesCategory = placeFilters.categories.size === 0 || placeFilters.categories.has(place.category);
-    const matchesSearch = !placeFilters.search || getPlaceNameFromLink(place.link).toLowerCase().includes(placeFilters.search);
+    const matchesSearch = !placeFilters.search || getPlaceNameFromLink(place.resolvedLink || place.link).toLowerCase().includes(placeFilters.search);
     return matchesCategory && matchesSearch;
+  }).sort(comparePlaces);
+}
+
+function comparePlaces(firstPlace, secondPlace) {
+  const direction = placeSortDirection === "asc" ? 1 : -1;
+  let result = 0;
+
+  if (placeSort === "distance") {
+    result = getDistanceSortValue(firstPlace.distance) - getDistanceSortValue(secondPlace.distance);
+    return result * direction;
+  }
+
+  if (placeSort === "name") {
+    result = getPlaceNameFromLink(firstPlace.resolvedLink || firstPlace.link).localeCompare(getPlaceNameFromLink(secondPlace.resolvedLink || secondPlace.link));
+    return result * direction;
+  }
+
+  if (placeSort === "price") {
+    result = getPriceSortValue(firstPlace.price) - getPriceSortValue(secondPlace.price);
+    return result * direction;
+  }
+
+  result = new Date(firstPlace.addedAt).getTime() - new Date(secondPlace.addedAt).getTime();
+  return result * direction;
+}
+
+function getDistanceSortValue(value) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const number = Number.parseFloat(String(value).replace(",", "."));
+  if (!Number.isFinite(number)) return Number.POSITIVE_INFINITY;
+  return /\bm\b/i.test(value) && !/\bkm\b/i.test(value) ? number / 1000 : number;
+}
+
+function getPriceSortValue(value) {
+  const normalizedValue = String(value || "$").trim();
+  return Math.min(Math.max(normalizedValue.length, 1), 4);
+}
+
+function syncSortMenu() {
+  elements.sortPlacesMenu.querySelectorAll("[data-place-sort]").forEach((option) => {
+    const isActive = option.dataset.placeSort === placeSort;
+    option.classList.toggle("is-active", isActive);
+    option.dataset.sortDirection = isActive ? placeSortDirection : "";
+    option.setAttribute("aria-pressed", String(isActive));
   });
+}
+
+function getDefaultSortDirection(sortName) {
+  return sortName === "addedAt" ? "desc" : "asc";
 }
 
 function createPlaceCategoryIcon(category) {
@@ -458,10 +633,15 @@ function getPlaceNameFromLink(value) {
   try {
     const url = new URL(value);
     const placePathMatch = url.pathname.match(/\/place\/([^/]+)/);
-    const queryValue = url.searchParams.get("q") || url.searchParams.get("query");
+    const searchPathMatch = url.pathname.match(/\/maps\/search\/([^/@]+)/);
+    const queryValue = url.searchParams.get("query") || url.searchParams.get("q");
 
     if (placePathMatch) {
       return formatPlaceName(placePathMatch[1]);
+    }
+
+    if (searchPathMatch) {
+      return formatPlaceName(searchPathMatch[1]);
     }
 
     if (queryValue && !/^[-\d.,\s]+$/.test(queryValue)) {
@@ -475,8 +655,10 @@ function getPlaceNameFromLink(value) {
 }
 
 function formatPlaceName(value) {
-  return decodeURIComponent(value)
+  return decodeURIComponent(value.split("?")[0])
     .replace(/\+/g, " ")
+    .replace(/%20/g, " ")
+    .replace(/,/g, ", ")
     .replace(/\s+/g, " ")
     .trim() || "Google Maps Place";
 }
@@ -507,12 +689,15 @@ function setActiveScreen(screen) {
 
   closeResultModal();
   closePlaceModal();
+  closeRandomPlaceModal();
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function openPlaceModal() {
   elements.placeModal.hidden = false;
   showPlaceFormError("");
+  syncPlaceCategoryChips();
+  syncPlacePriceChips();
   window.setTimeout(() => elements.placeLink.focus(), 0);
 }
 
@@ -520,6 +705,116 @@ function closePlaceModal() {
   elements.placeModal.hidden = true;
   elements.placeForm.reset();
   showPlaceFormError("");
+  syncPlaceCategoryChips();
+  syncPlacePriceChips();
+}
+
+async function rollRandomPlace() {
+  setRandomPlaceLoading(true);
+
+  try {
+    userLocation = userLocation || (await getCurrentLocation());
+    await resolveSavedPlaceLinks();
+    const candidates = getRandomPlaceCandidates(5000);
+
+    if (candidates.length === 0) {
+      randomPlace = null;
+      renderRandomPlaceEmpty();
+      elements.randomPlaceModal.hidden = false;
+      return;
+    }
+
+    randomPlace = candidates[Math.floor(Math.random() * candidates.length)];
+    renderRandomPlace(randomPlace);
+    elements.randomPlaceModal.hidden = false;
+  } catch {
+    randomPlace = null;
+    renderRandomPlaceError();
+    elements.randomPlaceModal.hidden = false;
+  } finally {
+    setRandomPlaceLoading(false);
+  }
+}
+
+function getRandomPlaceCandidates(maxDistanceMeters) {
+  return state.places
+    .map((place) => {
+      const coordinates = getCoordinatesFromMapsLink(place.resolvedLink || place.link);
+      if (!coordinates || !userLocation) return null;
+
+      const distanceMeters = getDistanceInMeters(userLocation, coordinates);
+      return distanceMeters <= maxDistanceMeters ? { ...place, randomDistance: formatDistance(distanceMeters) } : null;
+    })
+    .filter(Boolean);
+}
+
+function renderRandomPlace(place) {
+  const displayLink = place.resolvedLink || place.link;
+  const placeName = getPlaceNameFromLink(displayLink);
+  elements.randomPlaceResult.innerHTML = `
+    <div class="random-place-card">
+      <div class="place-card-top-row">
+        <div class="place-category-icon" aria-hidden="true">${escapeHtml(getPlaceCategoryEmoji(place.category))}</div>
+        <span class="place-category-label">${escapeHtml(place.category)}</span>
+        <span class="place-price-label">${escapeHtml(place.price || "$")}</span>
+      </div>
+      <strong>${escapeHtml(placeName)}</strong>
+      <span class="place-link-text">${escapeHtml(getDisplayLink(displayLink))}</span>
+      <span class="place-distance">${escapeHtml(place.randomDistance || place.distance || "Within 5 km")}</span>
+    </div>
+  `;
+  elements.openRandomPlaceButton.disabled = false;
+}
+
+function renderRandomPlaceEmpty() {
+  elements.randomPlaceResult.innerHTML = `
+    <div class="random-place-card is-empty">
+      <strong>No Place Around 5 Km</strong>
+      <p>Add places with full Maps coordinates, then try again.</p>
+    </div>
+  `;
+  elements.openRandomPlaceButton.disabled = true;
+}
+
+function renderRandomPlaceError() {
+  elements.randomPlaceResult.innerHTML = `
+    <div class="random-place-card is-empty">
+      <strong>Location Unavailable</strong>
+      <p>Allow location access to pick a nearby place.</p>
+    </div>
+  `;
+  elements.openRandomPlaceButton.disabled = true;
+}
+
+function closeRandomPlaceModal() {
+  elements.randomPlaceModal.hidden = true;
+}
+
+function setRandomPlaceLoading(isLoading) {
+  elements.randomPlaceButton.disabled = isLoading;
+  elements.rollPlaceAgainButton.disabled = isLoading;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+  }[character]));
+}
+
+function setLocationButtonState(stateName) {
+  const labels = {
+    idle: "Use My Location",
+    loading: "Getting Location",
+    success: "Distance Updated",
+    empty: "No Coordinates Found",
+    error: "Location Unavailable",
+  };
+  elements.useLocationButton.dataset.locationState = stateName;
+  elements.useLocationButton.title = labels[stateName] || labels.idle;
+  elements.useLocationButton.setAttribute("aria-label", labels[stateName] || labels.idle);
 }
 
 function getDailyBudget(balance) {
@@ -875,6 +1170,7 @@ function loadState() {
           link: String(place.link),
           resolvedLink: typeof place.resolvedLink === "string" ? place.resolvedLink : "",
           category: String(place.category),
+          price: typeof place.price === "string" ? place.price : "$",
           distance: typeof place.distance === "string" ? place.distance : "",
           addedAt: typeof place.addedAt === "string" ? place.addedAt : new Date().toISOString(),
         }))
