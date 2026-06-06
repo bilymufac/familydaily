@@ -1,5 +1,6 @@
 const storageKey = "daily-budget-state";
 const sections = ["meal", "transportation"];
+const placeCategories = ["Restaurant", "Cafe", "Shopping", "Activity", "Other"];
 const currency = new Intl.NumberFormat("id-ID", {
   style: "currency",
   currency: "IDR",
@@ -11,7 +12,11 @@ const remainingWorkingDays = countWorkingDaysUntilCutoff(today);
 const pastWorkingDays = countPastWorkingDaysUntilCutoff(today);
 const totalWorkingDays = countWorkingDaysInCutoffPeriod(today);
 const state = loadState();
-const placeImageRequests = new Set();
+const placeFilters = {
+  categories: new Set(),
+  search: "",
+};
+let userLocation = null;
 
 const elements = {
   appScreens: document.querySelectorAll("[data-app-screen]"),
@@ -42,10 +47,19 @@ const elements = {
   placeForm: document.querySelector("#place-form"),
   placeLink: document.querySelector("#place-link"),
   placeCategory: document.querySelector("#place-category"),
+  placeDistance: document.querySelector("#place-distance"),
   placeFormError: document.querySelector("#place-form-error"),
   placeList: document.querySelector("#place-list"),
   placeCount: document.querySelector("#place-count"),
   placesEmptyState: document.querySelector("#places-empty-state"),
+  placeSearch: document.querySelector("#place-search"),
+  categoryFilterChips: document.querySelector("#category-filter-chips"),
+  useLocationButton: document.querySelector("#use-location-button"),
+  placesEmptyTitle: document.querySelector("#places-empty-state strong"),
+  placesEmptyText: document.querySelector("#places-empty-state p"),
+  openPlaceModalButton: document.querySelector("#open-place-modal-button"),
+  closePlaceModalButton: document.querySelector("#close-place-modal-button"),
+  placeModal: document.querySelector("#place-modal"),
 };
 
 elements.todayDate.textContent = formatDate(today);
@@ -56,11 +70,22 @@ elements.navItems.forEach((item) => {
   });
 });
 
+elements.openPlaceModalButton.addEventListener("click", openPlaceModal);
+elements.closePlaceModalButton.addEventListener("click", closePlaceModal);
+
+elements.placeModal.addEventListener("click", (event) => {
+  if (event.target === elements.placeModal) {
+    closePlaceModal();
+  }
+});
+
 elements.placeForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
   const link = normalizeGoogleMapsLink(elements.placeLink.value);
   const category = elements.placeCategory.value;
+  const manualDistance = normalizeDistance(elements.placeDistance.value);
+  const distance = manualDistance || getAutoDistanceLabel(link);
 
   if (!link) {
     showPlaceFormError("Enter a valid Google Maps link.");
@@ -78,23 +103,80 @@ elements.placeForm.addEventListener("submit", (event) => {
     id: createPlaceId(),
     link,
     category,
+    distance,
+    addedAt: new Date().toISOString(),
   });
   saveState();
   renderPlaces();
   elements.placeForm.reset();
   showPlaceFormError("");
+  closePlaceModal();
 });
 
 elements.placeLink.addEventListener("input", () => showPlaceFormError(""));
 elements.placeCategory.addEventListener("change", () => showPlaceFormError(""));
 
+elements.useLocationButton.addEventListener("click", async () => {
+  elements.useLocationButton.textContent = "Getting Location";
+  elements.useLocationButton.disabled = true;
+
+  try {
+    userLocation = await getCurrentLocation();
+    const updatedCount = updatePlaceDistancesFromLocation();
+    saveState();
+    renderPlaces();
+    elements.useLocationButton.textContent = updatedCount > 0 ? "Distance Updated" : "No Coordinates Found";
+  } catch {
+    elements.useLocationButton.textContent = "Location Unavailable";
+  } finally {
+    window.setTimeout(() => {
+      elements.useLocationButton.textContent = "Use My Location";
+      elements.useLocationButton.disabled = false;
+    }, 1800);
+  }
+});
+
+elements.placeSearch.addEventListener("input", () => {
+  placeFilters.search = elements.placeSearch.value.trim().toLowerCase();
+  renderPlaces();
+});
+
+elements.categoryFilterChips.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-category-filter]");
+  if (!chip) return;
+
+  const category = chip.dataset.categoryFilter;
+  if (placeFilters.categories.has(category)) {
+    placeFilters.categories.delete(category);
+  } else {
+    placeFilters.categories.add(category);
+  }
+  renderPlaces();
+});
+
 elements.placeList.addEventListener("click", (event) => {
   const removeButton = event.target.closest("[data-remove-place]");
-  if (!removeButton) return;
+  if (removeButton) {
+    state.places = state.places.filter((place) => place.id !== removeButton.dataset.removePlace);
+    saveState();
+    renderPlaces();
+    return;
+  }
 
-  state.places = state.places.filter((place) => place.id !== removeButton.dataset.removePlace);
-  saveState();
-  renderPlaces();
+  const card = event.target.closest("[data-open-place]");
+  if (card) {
+    window.open(card.dataset.openPlace, "_blank", "noopener,noreferrer");
+  }
+});
+
+elements.placeList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+
+  const card = event.target.closest("[data-open-place]");
+  if (!card || event.target !== card) return;
+
+  event.preventDefault();
+  window.open(card.dataset.openPlace, "_blank", "noopener,noreferrer");
 });
 
 sections.forEach((section) => {
@@ -214,6 +296,7 @@ elements.resultModal.addEventListener("click", (event) => {
   }
 });
 
+renderCategoryFilterChips();
 render();
 
 function render() {
@@ -228,40 +311,53 @@ function render() {
 
 function renderPlaces() {
   elements.placeList.innerHTML = "";
-  elements.placeCount.textContent = String(state.places.length);
-  elements.placesEmptyState.hidden = state.places.length > 0;
+  const visiblePlaces = getFilteredPlaces();
+  elements.placeCount.textContent = String(visiblePlaces.length);
+  elements.placesEmptyState.hidden = visiblePlaces.length > 0;
+  elements.placeList.hidden = visiblePlaces.length === 0;
+  syncCategoryFilterChips();
 
-  state.places.forEach((place) => {
+  if (visiblePlaces.length === 0) {
+    const hasFilters = placeFilters.search || placeFilters.categories.size > 0;
+    elements.placesEmptyTitle.textContent = hasFilters ? "No Matching Places" : "No Saved Places";
+    elements.placesEmptyText.textContent = hasFilters ? "Try another search or category." : "Add a Google Maps link to start your list.";
+  }
+
+  visiblePlaces.forEach((place) => {
     const card = document.createElement("article");
     card.className = "place-card";
-
-    const thumbnail = createPlaceThumbnail(place);
+    card.dataset.openPlace = place.link;
+    card.tabIndex = 0;
+    card.setAttribute("role", "link");
+    card.setAttribute("aria-label", `Open ${getPlaceNameFromLink(place.link)} in Google Maps`);
 
     const content = document.createElement("div");
     content.className = "place-card-content";
 
-    const category = document.createElement("strong");
+    const topRow = document.createElement("div");
+    topRow.className = "place-card-top-row";
+
+    const categoryIcon = createPlaceCategoryIcon(place.category);
+
+    const category = document.createElement("span");
+    category.className = "place-category-label";
     category.textContent = place.category;
+    topRow.append(categoryIcon, category);
 
-    const link = document.createElement("a");
-    link.href = place.link;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
+    const title = document.createElement("strong");
+    title.textContent = getPlaceNameFromLink(place.link);
+
+    const link = document.createElement("span");
+    link.className = "place-link-text";
     link.textContent = getDisplayLink(place.link);
-    link.setAttribute("aria-label", `Open ${place.category} in Google Maps`);
-    content.append(category, link);
 
-    const actions = document.createElement("div");
-    actions.className = "place-card-actions";
+    const distance = document.createElement("span");
+    distance.className = "place-distance";
+    distance.textContent = place.distance || "Distance Not Set";
 
-    const openLink = document.createElement("a");
-    openLink.className = "place-action-button open-place";
-    openLink.href = place.link;
-    openLink.target = "_blank";
-    openLink.rel = "noopener noreferrer";
-    openLink.title = "Open in Google Maps";
-    openLink.setAttribute("aria-label", `Open ${place.category} in Google Maps`);
-    openLink.innerHTML = '<span class="place-action-icon open-icon" aria-hidden="true"></span>';
+    const addedDate = document.createElement("small");
+    addedDate.className = "place-added-date";
+    addedDate.textContent = formatAddedDate(place.addedAt);
 
     const removeButton = document.createElement("button");
     removeButton.className = "place-action-button";
@@ -271,68 +367,62 @@ function renderPlaces() {
     removeButton.setAttribute("aria-label", `Remove ${place.category}`);
     removeButton.innerHTML = '<span class="place-action-icon delete-icon" aria-hidden="true"></span>';
 
-    actions.append(openLink, removeButton);
-    card.append(thumbnail, content, actions);
+    const footer = document.createElement("div");
+    footer.className = "place-card-footer";
+    footer.append(addedDate, removeButton);
+
+    content.append(topRow, title, link, distance, footer);
+    card.append(content);
     elements.placeList.append(card);
   });
-
-  hydratePlaceImages();
 }
 
-function createPlaceThumbnail(place) {
-  const thumbnail = document.createElement("div");
-  thumbnail.className = "place-card-thumbnail";
-
-  if (!place.imageUrl) {
-    thumbnail.classList.add("is-placeholder");
-    thumbnail.innerHTML = '<span class="bottom-nav-icon heroicon-map-pin" aria-hidden="true"></span>';
-    return thumbnail;
-  }
-
-  const image = document.createElement("img");
-  image.src = place.imageUrl;
-  image.alt = `${place.category} place photo`;
-  image.loading = "lazy";
-  image.referrerPolicy = "no-referrer";
-  image.addEventListener("error", () => {
-    thumbnail.classList.add("is-placeholder");
-    thumbnail.innerHTML = '<span class="bottom-nav-icon heroicon-map-pin" aria-hidden="true"></span>';
-  });
-
-  thumbnail.append(image);
-  return thumbnail;
-}
-
-function hydratePlaceImages() {
-  state.places.forEach((place) => {
-    if (place.imageUrl || placeImageRequests.has(place.id)) return;
-    placeImageRequests.add(place.id);
-
-    fetchPlaceImage(place.link)
-      .then((imageUrl) => {
-        if (!imageUrl) return;
-        const savedPlace = state.places.find((item) => item.id === place.id);
-        if (!savedPlace) return;
-        savedPlace.imageUrl = imageUrl;
-        saveState();
-        renderPlaces();
-      })
-      .finally(() => placeImageRequests.delete(place.id));
+function syncCategoryFilterChips() {
+  elements.categoryFilterChips.querySelectorAll("[data-category-filter]").forEach((chip) => {
+    const isActive = placeFilters.categories.has(chip.dataset.categoryFilter);
+    chip.classList.toggle("is-active", isActive);
+    chip.setAttribute("aria-pressed", String(isActive));
   });
 }
 
-async function fetchPlaceImage(link) {
-  try {
-    const endpoint = `https://api.microlink.io/?url=${encodeURIComponent(link)}`;
-    const response = await fetch(endpoint);
-    if (!response.ok) return "";
+function renderCategoryFilterChips() {
+  elements.categoryFilterChips.innerHTML = "";
+  placeCategories.forEach((category) => {
+    const chip = document.createElement("button");
+    chip.className = "category-filter-chip";
+    chip.type = "button";
+    chip.dataset.categoryFilter = category;
+    chip.setAttribute("aria-pressed", "false");
+    chip.textContent = category;
+    elements.categoryFilterChips.append(chip);
+  });
+}
 
-    const result = await response.json();
-    const imageUrl = result?.data?.image?.url;
-    return typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
-  } catch {
-    return "";
-  }
+function getFilteredPlaces() {
+  return state.places.filter((place) => {
+    const matchesCategory = placeFilters.categories.size === 0 || placeFilters.categories.has(place.category);
+    const matchesSearch = !placeFilters.search || getPlaceNameFromLink(place.link).toLowerCase().includes(placeFilters.search);
+    return matchesCategory && matchesSearch;
+  });
+}
+
+function createPlaceCategoryIcon(category) {
+  const icon = document.createElement("div");
+  icon.className = "place-category-icon";
+  icon.textContent = getPlaceCategoryEmoji(category);
+  icon.setAttribute("aria-hidden", "true");
+  return icon;
+}
+
+function getPlaceCategoryEmoji(category) {
+  const icons = {
+    Restaurant: "🍽️",
+    Cafe: "☕",
+    Shopping: "🛍️",
+    Activity: "🎟️",
+    Other: "📍",
+  };
+  return icons[category] || icons.Other;
 }
 
 function normalizeGoogleMapsLink(value) {
@@ -360,6 +450,33 @@ function getDisplayLink(value) {
   }
 }
 
+function getPlaceNameFromLink(value) {
+  try {
+    const url = new URL(value);
+    const placePathMatch = url.pathname.match(/\/place\/([^/]+)/);
+    const queryValue = url.searchParams.get("q") || url.searchParams.get("query");
+
+    if (placePathMatch) {
+      return formatPlaceName(placePathMatch[1]);
+    }
+
+    if (queryValue && !/^[-\d.,\s]+$/.test(queryValue)) {
+      return formatPlaceName(queryValue);
+    }
+  } catch {
+    // Fall back to a stable generic title for links that do not expose a name.
+  }
+
+  return "Google Maps Place";
+}
+
+function formatPlaceName(value) {
+  return decodeURIComponent(value)
+    .replace(/\+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "Google Maps Place";
+}
+
 function createPlaceId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -385,7 +502,20 @@ function setActiveScreen(screen) {
   });
 
   closeResultModal();
+  closePlaceModal();
   window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function openPlaceModal() {
+  elements.placeModal.hidden = false;
+  showPlaceFormError("");
+  window.setTimeout(() => elements.placeLink.focus(), 0);
+}
+
+function closePlaceModal() {
+  elements.placeModal.hidden = true;
+  elements.placeForm.reset();
+  showPlaceFormError("");
 }
 
 function getDailyBudget(balance) {
@@ -536,6 +666,110 @@ function formatDate(date) {
   }).format(date);
 }
 
+function formatAddedDate(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "Today";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function normalizeDistance(value) {
+  const distance = value.trim();
+  if (!distance) return "";
+  return /[a-z]/i.test(distance) ? distance : `${distance} km`;
+}
+
+function getAutoDistanceLabel(link) {
+  if (!userLocation) return "";
+  const placeLocation = getCoordinatesFromMapsLink(link);
+  if (!placeLocation) return "";
+  return formatDistance(getDistanceInMeters(userLocation, placeLocation));
+}
+
+function updatePlaceDistancesFromLocation() {
+  let updatedCount = 0;
+  state.places.forEach((place) => {
+    const distance = getAutoDistanceLabel(place.link);
+    if (!distance) return;
+    place.distance = distance;
+    updatedCount += 1;
+  });
+  return updatedCount;
+}
+
+function getCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation unavailable"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      reject,
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 12000 }
+    );
+  });
+}
+
+function getCoordinatesFromMapsLink(value) {
+  let decodedValue = value;
+  try {
+    decodedValue = decodeURIComponent(value);
+  } catch {
+    // Keep the original value if the URL contains malformed escape sequences.
+  }
+
+  const pathMatch = decodedValue.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  const dataMatch = decodedValue.match(/!3d(-?\d+(?:\.\d+)?).*?!4d(-?\d+(?:\.\d+)?)/);
+  const match = pathMatch || dataMatch;
+  if (match) return normalizeCoordinates(Number(match[1]), Number(match[2]));
+
+  try {
+    const url = new URL(value);
+    const queryValue = url.searchParams.get("q") || url.searchParams.get("query") || url.searchParams.get("ll");
+    const queryMatch = queryValue?.match(/(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    return queryMatch ? normalizeCoordinates(Number(queryMatch[1]), Number(queryMatch[2])) : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCoordinates(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
+function getDistanceInMeters(start, end) {
+  const earthRadius = 6371000;
+  const startLatitude = toRadians(start.latitude);
+  const endLatitude = toRadians(end.latitude);
+  const latitudeDelta = toRadians(end.latitude - start.latitude);
+  const longitudeDelta = toRadians(end.longitude - start.longitude);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function formatDistance(meters) {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  const kilometers = meters / 1000;
+  return `${kilometers < 10 ? kilometers.toFixed(1) : Math.round(kilometers)} km`;
+}
+
 function countWorkingDaysUntilCutoff(startDate) {
   const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
   const endDate = new Date(startDate.getFullYear(), startDate.getMonth(), 25);
@@ -611,7 +845,8 @@ function loadState() {
           id: String(place.id),
           link: String(place.link),
           category: String(place.category),
-          imageUrl: typeof place.imageUrl === "string" ? place.imageUrl : "",
+          distance: typeof place.distance === "string" ? place.distance : "",
+          addedAt: typeof place.addedAt === "string" ? place.addedAt : new Date().toISOString(),
         }))
       : [];
 

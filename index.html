@@ -126,35 +126,18 @@
         <h1 class="page-title">Places</h1>
       </header>
 
-      <section class="place-form-card" aria-labelledby="add-place-title">
-        <h2 id="add-place-title">Add Place</h2>
-        <form class="place-form" id="place-form" novalidate>
-          <label class="field" for="place-link">
-            <span>Google Maps Link</span>
-            <input id="place-link" type="url" inputmode="url" autocomplete="url" placeholder="Paste Google Maps link" required />
-          </label>
-
-          <label class="field" for="place-category">
-            <span>Category</span>
-            <select id="place-category" required>
-              <option value="">Select Category</option>
-              <option value="Restaurant">Restaurant</option>
-              <option value="Cafe">Cafe</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Activity">Activity</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-
-          <p class="form-error" id="place-form-error" role="alert" hidden></p>
-          <button class="save-place-button" type="submit">Add Place</button>
-        </form>
-      </section>
-
       <section class="saved-places" aria-labelledby="saved-places-title">
         <div class="section-heading-row">
           <h2 id="saved-places-title">Saved Places</h2>
           <span id="place-count">0</span>
+        </div>
+        <div class="places-filter-bar" aria-label="Filter Saved Places">
+          <label class="places-search" for="place-search">
+            <span aria-hidden="true"></span>
+            <input id="place-search" type="search" autocomplete="off" placeholder="Search Place" />
+          </label>
+          <div class="category-filter-chips" id="category-filter-chips" aria-label="Category Filter"></div>
+          <button class="use-location-button" id="use-location-button" type="button">Use My Location</button>
         </div>
         <div class="place-list" id="place-list"></div>
         <div class="places-empty-state" id="places-empty-state">
@@ -163,6 +146,10 @@
           <p>Add a Google Maps link to start your list.</p>
         </div>
       </section>
+
+      <button class="places-fab" id="open-place-modal-button" type="button" aria-label="Add Place" title="Add Place">
+        <span aria-hidden="true">+</span>
+      </button>
     </main>
 
     <main class="app-shell app-screen empty-screen" data-app-screen="account" hidden>
@@ -198,6 +185,39 @@
           </div>
         </div>
         <button class="copy-result-button" id="copy-result-button" type="button">Copy</button>
+      </div>
+    </div>
+
+    <div class="place-modal" id="place-modal" hidden>
+      <div class="place-dialog" role="dialog" aria-modal="true" aria-labelledby="add-place-title">
+        <button class="modal-close-button" id="close-place-modal-button" type="button" aria-label="Close Add Place">×</button>
+        <h2 id="add-place-title">Add Place</h2>
+        <form class="place-form" id="place-form" novalidate>
+          <label class="field" for="place-link">
+            <span>Google Maps Link</span>
+            <input id="place-link" type="url" inputmode="url" autocomplete="url" placeholder="Paste Google Maps link" required />
+          </label>
+
+          <label class="field" for="place-category">
+            <span>Category</span>
+            <select id="place-category" required>
+              <option value="">Select Category</option>
+              <option value="Restaurant">Restaurant</option>
+              <option value="Cafe">Cafe</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Activity">Activity</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <label class="field" for="place-distance">
+            <span>Distance</span>
+            <input id="place-distance" type="text" inputmode="decimal" autocomplete="off" placeholder="Example: 2.5 km" />
+          </label>
+
+          <p class="form-error" id="place-form-error" role="alert" hidden></p>
+          <button class="save-place-button" type="submit">Add Place</button>
+        </form>
       </div>
     </div>
 
