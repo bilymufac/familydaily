@@ -79,13 +79,12 @@ elements.placeModal.addEventListener("click", (event) => {
   }
 });
 
-elements.placeForm.addEventListener("submit", (event) => {
+elements.placeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const link = normalizeGoogleMapsLink(elements.placeLink.value);
   const category = elements.placeCategory.value;
   const manualDistance = normalizeDistance(elements.placeDistance.value);
-  const distance = manualDistance || getAutoDistanceLabel(link);
 
   if (!link) {
     showPlaceFormError("Enter a valid Google Maps link.");
@@ -99,9 +98,13 @@ elements.placeForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const resolvedLink = await resolveMapsLink(link);
+  const distance = manualDistance || getAutoDistanceLabel(resolvedLink || link);
+
   state.places.unshift({
     id: createPlaceId(),
     link,
+    resolvedLink,
     category,
     distance,
     addedAt: new Date().toISOString(),
@@ -122,6 +125,7 @@ elements.useLocationButton.addEventListener("click", async () => {
 
   try {
     userLocation = await getCurrentLocation();
+    await resolveSavedPlaceLinks();
     const updatedCount = updatePlaceDistancesFromLocation();
     saveState();
     renderPlaces();
@@ -692,12 +696,37 @@ function getAutoDistanceLabel(link) {
 function updatePlaceDistancesFromLocation() {
   let updatedCount = 0;
   state.places.forEach((place) => {
-    const distance = getAutoDistanceLabel(place.link);
+    const distance = getAutoDistanceLabel(place.resolvedLink || place.link);
     if (!distance) return;
     place.distance = distance;
     updatedCount += 1;
   });
   return updatedCount;
+}
+
+async function resolveMapsLink(link) {
+  try {
+    const response = await fetch("/.netlify/functions/resolve-maps-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: link }),
+    });
+    if (!response.ok) return link;
+
+    const result = await response.json();
+    return normalizeGoogleMapsLink(result.resolvedUrl) || link;
+  } catch {
+    return link;
+  }
+}
+
+async function resolveSavedPlaceLinks() {
+  const unresolvedPlaces = state.places.filter((place) => !place.resolvedLink || place.resolvedLink === place.link);
+  await Promise.all(
+    unresolvedPlaces.map(async (place) => {
+      place.resolvedLink = await resolveMapsLink(place.link);
+    })
+  );
 }
 
 function getCurrentLocation() {
@@ -844,6 +873,7 @@ function loadState() {
       ? saved.places.filter((place) => place?.id && place?.link && place?.category).map((place) => ({
           id: String(place.id),
           link: String(place.link),
+          resolvedLink: typeof place.resolvedLink === "string" ? place.resolvedLink : "",
           category: String(place.category),
           distance: typeof place.distance === "string" ? place.distance : "",
           addedAt: typeof place.addedAt === "string" ? place.addedAt : new Date().toISOString(),
