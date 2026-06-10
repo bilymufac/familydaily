@@ -173,8 +173,124 @@
       </button>
     </main>
 
-    <main class="app-shell app-screen empty-screen" data-app-screen="account" hidden>
-      <h1 class="page-title">Account</h1>
+    <main class="app-shell app-screen account-screen" data-app-screen="account" hidden>
+      <header class="screen-header">
+        <h1 class="page-title" id="account-page-title">Login</h1>
+      </header>
+
+      <section class="account-card auth-view" id="login-view" data-auth-view="login" aria-labelledby="login-title">
+        <div class="login-brand">
+          <img src="assets/favicon.svg" alt="" />
+          <h2 id="login-title">Family Daily</h2>
+        </div>
+
+        <form class="account-form" id="login-form" novalidate>
+          <label class="field" for="account-username">
+            <span>Username</span>
+            <input id="account-username" type="text" autocomplete="username" placeholder="Username" required />
+          </label>
+
+          <label class="field" for="account-password">
+            <span>Password</span>
+            <input id="account-password" type="password" autocomplete="current-password" placeholder="Password" required />
+          </label>
+
+          <p class="form-error" id="login-error" role="alert" hidden></p>
+          <button class="save-place-button" type="submit">Login</button>
+          <div class="account-link-actions">
+            <button id="open-forgot-password-button" type="button">Reset Password</button>
+            <button id="open-register-button" type="button">Register</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="account-card auth-view" id="register-view" data-auth-view="register" aria-labelledby="register-title" hidden>
+        <div>
+          <h2 id="register-title">Register</h2>
+          <p>Create a new Family Daily account.</p>
+        </div>
+
+        <form class="account-form" id="register-form" novalidate>
+          <label class="field" for="register-name">
+            <span>Name</span>
+            <input id="register-name" type="text" autocomplete="name" placeholder="Name" required />
+          </label>
+
+          <label class="field" for="register-username">
+            <span>Username</span>
+            <input id="register-username" type="text" autocomplete="username" placeholder="Username" required />
+          </label>
+
+          <label class="field" for="register-email">
+            <span>Email</span>
+            <input id="register-email" type="email" autocomplete="email" placeholder="name@email.com" required />
+          </label>
+
+          <label class="field" for="register-password">
+            <span>Password</span>
+            <input id="register-password" type="password" autocomplete="new-password" placeholder="Password" required />
+          </label>
+
+          <label class="field" for="register-confirm-password">
+            <span>Confirm Password</span>
+            <input id="register-confirm-password" type="password" autocomplete="new-password" placeholder="Confirm Password" required />
+          </label>
+
+          <p class="form-error" id="register-error" role="alert" hidden></p>
+          <button class="save-place-button" type="submit">Create Account</button>
+          <div class="account-link-actions">
+            <button id="back-to-login-from-register" type="button">Back To Login</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="account-card auth-view" id="forgot-password-view" data-auth-view="forgot" aria-labelledby="forgot-password-title" hidden>
+        <div>
+          <h2 id="forgot-password-title">Reset Password</h2>
+          <p>Enter your email and a verification link will be sent to you.</p>
+        </div>
+
+        <form class="account-form" id="forgot-password-form" novalidate>
+          <label class="field" for="forgot-email">
+            <span>Email</span>
+            <input id="forgot-email" type="email" autocomplete="email" placeholder="name@email.com" required />
+          </label>
+
+          <p class="form-error" id="forgot-password-message" role="alert" hidden></p>
+          <button class="save-place-button" type="submit">Send Verification</button>
+          <div class="account-link-actions">
+            <button id="back-to-login-from-forgot" type="button">Back To Login</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="account-card auth-view" id="profile-view" data-auth-view="profile" aria-labelledby="account-title" hidden>
+        <div class="account-profile-row">
+          <div class="account-avatar" id="account-avatar" aria-hidden="true">F</div>
+          <div>
+            <span class="profile-label">Profile</span>
+            <h2 id="account-title">Logged In</h2>
+            <p id="account-username-output">@username</p>
+          </div>
+        </div>
+
+        <div class="profile-info-list">
+          <div>
+            <span>Name</span>
+            <strong id="profile-name-output">-</strong>
+          </div>
+          <div>
+            <span>Username</span>
+            <strong id="profile-username-output">-</strong>
+          </div>
+          <div>
+            <span>Email</span>
+            <strong id="profile-email-output">-</strong>
+          </div>
+        </div>
+
+        <button class="sign-out-button" id="sign-out-button" type="button">Sign Out</button>
+      </section>
     </main>
 
     <div class="result-modal" id="result-modal" hidden>
@@ -272,7 +388,7 @@
       </button>
       <button class="bottom-nav-item" type="button" data-nav-target="account">
         <span class="bottom-nav-icon heroicon-user" aria-hidden="true"></span>
-        <span>Account</span>
+        <span>Profile</span>
       </button>
     </nav>
 

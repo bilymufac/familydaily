@@ -1,4 +1,6 @@
-const storageKey = "daily-budget-state";
+const authStorageKey = "family-daily-account";
+const accountListStorageKey = "family-daily-accounts";
+const accountStoragePrefix = "family-daily-data";
 const sections = ["meal", "transportation"];
 const placeCategories = ["Restaurant", "Cafe", "Shopping", "Activity", "Other"];
 const priceCategories = ["$", "$$", "$$$", "$$$$"];
@@ -12,7 +14,8 @@ const today = new Date();
 const remainingWorkingDays = countWorkingDaysUntilCutoff(today);
 const pastWorkingDays = countPastWorkingDaysUntilCutoff(today);
 const totalWorkingDays = countWorkingDaysInCutoffPeriod(today);
-const state = loadState();
+let currentAccount = loadAccount();
+let state = loadState();
 const placeFilters = {
   categories: new Set(),
   search: "",
@@ -74,6 +77,33 @@ const elements = {
   openRandomPlaceButton: document.querySelector("#open-random-place-button"),
   closePlaceModalButton: document.querySelector("#close-place-modal-button"),
   placeModal: document.querySelector("#place-modal"),
+  accountPageTitle: document.querySelector("#account-page-title"),
+  authViews: document.querySelectorAll("[data-auth-view]"),
+  loginForm: document.querySelector("#login-form"),
+  accountUsername: document.querySelector("#account-username"),
+  accountPassword: document.querySelector("#account-password"),
+  loginError: document.querySelector("#login-error"),
+  openForgotPasswordButton: document.querySelector("#open-forgot-password-button"),
+  openRegisterButton: document.querySelector("#open-register-button"),
+  registerForm: document.querySelector("#register-form"),
+  registerName: document.querySelector("#register-name"),
+  registerUsername: document.querySelector("#register-username"),
+  registerEmail: document.querySelector("#register-email"),
+  registerPassword: document.querySelector("#register-password"),
+  registerConfirmPassword: document.querySelector("#register-confirm-password"),
+  registerError: document.querySelector("#register-error"),
+  backToLoginFromRegister: document.querySelector("#back-to-login-from-register"),
+  forgotPasswordForm: document.querySelector("#forgot-password-form"),
+  forgotEmail: document.querySelector("#forgot-email"),
+  forgotPasswordMessage: document.querySelector("#forgot-password-message"),
+  backToLoginFromForgot: document.querySelector("#back-to-login-from-forgot"),
+  accountAvatar: document.querySelector("#account-avatar"),
+  accountTitle: document.querySelector("#account-title"),
+  accountUsernameOutput: document.querySelector("#account-username-output"),
+  profileNameOutput: document.querySelector("#profile-name-output"),
+  profileUsernameOutput: document.querySelector("#profile-username-output"),
+  profileEmailOutput: document.querySelector("#profile-email-output"),
+  signOutButton: document.querySelector("#sign-out-button"),
 };
 
 elements.todayDate.textContent = formatDate(today);
@@ -377,19 +407,213 @@ elements.resultModal.addEventListener("click", (event) => {
   }
 });
 
+elements.loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const username = normalizeUsername(elements.accountUsername.value);
+  const password = elements.accountPassword.value;
+  const accounts = loadAccounts();
+
+  if (!username) {
+    showLoginError("Enter a username.");
+    elements.accountUsername.focus();
+    return;
+  }
+
+  if (!password) {
+    showLoginError("Enter a password.");
+    elements.accountPassword.focus();
+    return;
+  }
+
+  if (accounts[username]?.password !== password) {
+    showLoginError("Username or password is incorrect.");
+    return;
+  }
+
+  currentAccount = {
+    username,
+    name: accounts[username].name,
+    email: accounts[username].email,
+  };
+  localStorage.setItem(authStorageKey, JSON.stringify(currentAccount));
+  if (localStorage.getItem(getAccountStorageKey(username))) {
+    state = loadState();
+    renderBalanceInputs();
+    render();
+  } else {
+    saveState();
+    renderAccount();
+  }
+  showLoginError("");
+  elements.loginForm.reset();
+  setActiveScreen("balance");
+});
+
+elements.openRegisterButton.addEventListener("click", () => {
+  showLoginError("");
+  showAuthView("register");
+});
+
+elements.openForgotPasswordButton.addEventListener("click", () => {
+  showLoginError("");
+  showAuthView("forgot");
+});
+
+elements.backToLoginFromRegister.addEventListener("click", () => {
+  showRegisterError("");
+  showAuthView("login");
+});
+
+elements.backToLoginFromForgot.addEventListener("click", () => {
+  showForgotPasswordMessage("");
+  showAuthView("login");
+});
+
+elements.registerForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const name = elements.registerName.value.trim();
+  const username = normalizeUsername(elements.registerUsername.value);
+  const email = elements.registerEmail.value.trim().toLowerCase();
+  const password = elements.registerPassword.value;
+  const confirmPassword = elements.registerConfirmPassword.value;
+  const accounts = loadAccounts();
+
+  if (!name) {
+    showRegisterError("Enter your name.");
+    elements.registerName.focus();
+    return;
+  }
+
+  if (!username) {
+    showRegisterError("Enter a username.");
+    elements.registerUsername.focus();
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    showRegisterError("Enter a valid email.");
+    elements.registerEmail.focus();
+    return;
+  }
+
+  if (!password) {
+    showRegisterError("Enter a password.");
+    elements.registerPassword.focus();
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showRegisterError("Password confirmation does not match.");
+    elements.registerConfirmPassword.focus();
+    return;
+  }
+
+  if (accounts[username]) {
+    showRegisterError("Username already exists.");
+    return;
+  }
+
+  if (Object.values(accounts).some((account) => account?.email === email)) {
+    showRegisterError("Email is already registered.");
+    return;
+  }
+
+  accounts[username] = { name, username, email, password };
+  saveAccounts(accounts);
+  elements.accountUsername.value = username;
+  elements.registerForm.reset();
+  showAuthView("login");
+  showLoginError("Account created. Login to continue.", true);
+});
+
+elements.forgotPasswordForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const email = elements.forgotEmail.value.trim().toLowerCase();
+  const accounts = loadAccounts();
+
+  if (!isValidEmail(email)) {
+    showForgotPasswordMessage("Enter a valid email.");
+    elements.forgotEmail.focus();
+    return;
+  }
+
+  const hasAccount = Object.values(accounts).some((account) => account?.email === email);
+  if (!hasAccount) {
+    showForgotPasswordMessage("Email is not registered.");
+    return;
+  }
+
+  showForgotPasswordMessage("Verification sent to your email.", true);
+});
+
+elements.signOutButton.addEventListener("click", () => {
+  saveState();
+  currentAccount = null;
+  localStorage.removeItem(authStorageKey);
+  state = createFallbackState();
+  renderBalanceInputs();
+  render();
+  setActiveScreen("account");
+});
+
 renderCategoryFilterChips();
 renderPlaceCategoryChips();
 renderPlacePriceChips();
 render();
+setActiveScreen(currentAccount ? "balance" : "account");
 
 function render() {
   setWorkingDaysOutput(remainingWorkingDays);
   renderPlaces();
+  renderAccount();
 
   sections.forEach((section) => {
     setMonthlyBudgetOutput(section, state[section].monthlyBudget || 0);
     setIdealBudgetOutput(section);
   });
+}
+
+function renderBalanceInputs() {
+  sections.forEach((section) => {
+    document.querySelector(`[data-monthly-budget-input="${section}"]`).value = formatNumber(state[section].monthlyBudget);
+    setMonthlyBudgetEditing(section, false);
+    renderBalanceFields(section);
+  });
+}
+
+function renderAccount() {
+  const isLoggedIn = Boolean(currentAccount);
+  document.body.classList.toggle("is-authenticated", isLoggedIn);
+  showAuthView(isLoggedIn ? "profile" : "login");
+
+  if (!isLoggedIn) {
+    return;
+  }
+
+  const displayName = currentAccount.name || currentAccount.username;
+  elements.accountAvatar.textContent = displayName.slice(0, 1).toUpperCase();
+  elements.accountTitle.textContent = displayName;
+  elements.accountUsernameOutput.textContent = `@${currentAccount.username}`;
+  elements.profileNameOutput.textContent = currentAccount.name || "-";
+  elements.profileUsernameOutput.textContent = currentAccount.username;
+  elements.profileEmailOutput.textContent = currentAccount.email || "-";
+}
+
+function showAuthView(view) {
+  elements.authViews.forEach((item) => {
+    item.hidden = item.dataset.authView !== view;
+  });
+
+  const titles = {
+    login: "Login",
+    register: "Register",
+    forgot: "Reset Password",
+    profile: "Profile",
+  };
+  elements.accountPageTitle.textContent = titles[view] || "Profile";
 }
 
 function renderPlaces() {
@@ -673,12 +897,14 @@ function showPlaceFormError(message) {
 }
 
 function setActiveScreen(screen) {
+  const nextScreen = currentAccount || screen === "account" ? screen : "account";
+
   elements.appScreens.forEach((item) => {
-    item.hidden = item.dataset.appScreen !== screen;
+    item.hidden = item.dataset.appScreen !== nextScreen;
   });
 
   elements.navItems.forEach((item) => {
-    const isActive = item.dataset.navTarget === screen;
+    const isActive = item.dataset.navTarget === nextScreen;
     item.classList.toggle("is-active", isActive);
     if (isActive) {
       item.setAttribute("aria-current", "page");
@@ -1142,15 +1368,21 @@ function countWorkingDaysInCutoffPeriod(date) {
   return days;
 }
 
-function loadState() {
-  const fallback = {
+function createFallbackState() {
+  return {
     meal: { balances: [0], dailyBudget: 0, monthlyBudget: 0 },
     transportation: { balances: [0], dailyBudget: 0, monthlyBudget: 0 },
     places: [],
   };
+}
+
+function loadState() {
+  const fallback = createFallbackState();
 
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
+    if (!currentAccount) return fallback;
+
+    const saved = JSON.parse(localStorage.getItem(getAccountStorageKey(currentAccount.username)));
     const nextState = sections.reduce((loadedState, section) => {
       const balances = Array.isArray(saved?.[section]?.balances)
         ? saved[section].balances.map((balance) => Number(balance) || 0)
@@ -1183,5 +1415,69 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  if (!currentAccount) return;
+
+  localStorage.setItem(getAccountStorageKey(currentAccount.username), JSON.stringify(state));
+}
+
+function loadAccount() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(authStorageKey));
+    if (!saved?.username) return null;
+    const username = normalizeUsername(saved.username);
+    const accounts = loadAccounts();
+    const account = accounts[username];
+    if (!account) return null;
+
+    return {
+      username,
+      name: typeof account.name === "string" ? account.name : "",
+      email: typeof account.email === "string" ? account.email : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function loadAccounts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(accountListStorageKey));
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAccounts(accounts) {
+  localStorage.setItem(accountListStorageKey, JSON.stringify(accounts));
+}
+
+function getAccountStorageKey(username) {
+  return `${accountStoragePrefix}:${username}`;
+}
+
+function normalizeUsername(value) {
+  return String(value).trim().toLowerCase();
+}
+
+function showLoginError(message, isSuccess = false) {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = !message;
+  elements.loginError.classList.toggle("is-success", isSuccess);
+}
+
+function showRegisterError(message) {
+  elements.registerError.textContent = message;
+  elements.registerError.hidden = !message;
+  elements.registerError.classList.remove("is-success");
+}
+
+function showForgotPasswordMessage(message, isSuccess = false) {
+  elements.forgotPasswordMessage.textContent = message;
+  elements.forgotPasswordMessage.hidden = !message;
+  elements.forgotPasswordMessage.classList.toggle("is-success", isSuccess);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
